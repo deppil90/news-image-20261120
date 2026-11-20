@@ -1,180 +1,223 @@
 #!/usr/bin/env python3
-"""Draw the front page for Friday, 20 November 2026.
+"""Draw entry.png: a newspaper front page summing up Friday 20 November 2026.
 
-Writes entry.png (1024x1024) next to this file. Run in the session only;
-the graded program is main.py, which copies the finished image.
-Deterministic: fixed strings, fixed fonts, no randomness, no network,
-no clock. Every headline below was checked against live news reports
-for 20 November 2026 (Reuters, BBC, The Hindu, Space, Marketscreener,
-Daily Baku, SimpleLife / AI-curated wire roundups).
+Run from the repository root:  python3 draw.py
+Writes entry.png next to this script. Pillow only; no network, no clock.
 """
-
-from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-HERE = Path(__file__).resolve().parent
-OUT = HERE / "entry.png"
-
-W, H = 1024, 1024
-PAPER = (250, 246, 238)   # warm newsprint
-INK = (26, 26, 26)
-NAVY = (31, 42, 68)       # masthead band
-GOLD = (201, 162, 39)
-RED = (176, 42, 30)       # kickers
-GREY = (96, 92, 82)
-
-FONT_DIR = Path("/usr/share/fonts/truetype/noto")
-
-
-def font(name, size):
-    return ImageFont.truetype(str(FONT_DIR / name), size)
-
-
-SERIF_B = "NotoSerif-Bold.ttf"
-SERIF = "NotoSerif-Regular.ttf"
-SANS_B = "NotoSans-Bold.ttf"
-SANS = "NotoSans-Regular.ttf"
-
+PAGE = 1024
 MARGIN = 48
-COL_W = (W - 2 * MARGIN - 32) // 2  # two columns, 32px gutter
+GUTTER = 24
+COL_W = (PAGE - 2 * MARGIN - GUTTER) // 2
+
+PAPER = (247, 243, 232)
+NAVY = (26, 34, 64)
+GOLD = (201, 162, 39)
+INK = (20, 20, 20)
+KICKER_RED = (163, 29, 29)
+DECK_GREY = (61, 61, 61)
+RULE = (26, 34, 64)
+FAINT = (120, 116, 104)
+
+SERIF = "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"
+SERIF_B = "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
+SANS = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+SANS_B = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 
 
-def wrap(draw, text, fnt, max_w):
-    """Greedy word wrap; returns a list of lines that fit max_w."""
-    lines, cur = [], ""
+def font(path, size):
+    return ImageFont.truetype(path, size)
+
+
+def wrap(text, fnt, width):
+    """Greedy word wrap returning a list of lines that fit `width`."""
+    lines, current = [], ""
     for word in text.split():
-        trial = f"{cur} {word}".strip()
-        if draw.textlength(trial, font=fnt) <= max_w:
-            cur = trial
+        trial = word if not current else current + " " + word
+        if fnt.getlength(trial) <= width:
+            current = trial
         else:
-            if cur:
-                lines.append(cur)
-            cur = word
-    if cur:
-        lines.append(cur)
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
     return lines
 
 
-def draw_globe(draw, cx, cy, r, colour):
-    """Small globe: circle, two meridian ellipses, two latitude lines."""
-    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=colour, width=3)
-    draw.ellipse([cx - r // 3, cy - r, cx + r // 3, cy + r],
-                 outline=colour, width=2)
-    for dy in (-r // 2, r // 2):
-        y = cy + dy
-        half = int((r * r - dy * dy) ** 0.5)
-        draw.arc([cx - half, y - 6, cx + half, y + 6], 0, 180,
-                 fill=colour, width=2)
-    draw.line([cx - r, cy, cx + r, cy], fill=colour, width=2)
+def text_block(draw, x, y, lines, fnt, fill, leading):
+    """Draw wrapped lines starting at (x, y); return y below the last line."""
+    for line in lines:
+        draw.text((x, y), line, font=fnt, fill=fill)
+        y += leading
+    return y
+
+
+def paint_globe(draw, cx, cy, r):
+    """A simple wireframe globe: outline, meridians, parallels."""
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=GOLD, width=3)
+    draw.ellipse([cx - r * 0.55, cy - r, cx + r * 0.55, cy + r],
+                 outline=GOLD, width=2)
+    draw.ellipse([cx - r * 0.22, cy - r, cx + r * 0.22, cy + r],
+                 outline=GOLD, width=2)
+    draw.line([cx - r, cy, cx + r, cy], fill=GOLD, width=2)
+    draw.arc([cx - r, cy - r * 0.55, cx + r, cy + r * 0.55],
+             start=200, end=340, fill=GOLD, width=2)
+    draw.arc([cx - r, cy - r * 0.55, cx + r, cy + r * 0.55],
+             start=20, end=160, fill=GOLD, width=2)
+
+
+def paint_masthead(draw):
+    band_h = 118
+    draw.rectangle([0, 0, PAGE, band_h], fill=NAVY)
+    paint_globe(draw, 72, band_h // 2, 34)
+    title = font(SERIF_B, 58)
+    title_text = "ONE DAY IN THE WORLD"
+    tw = draw.textlength(title_text, font=title)
+    draw.text(((PAGE - tw) / 2, 18), title_text, font=title, fill=(255, 255, 255))
+    date_f = font(SANS_B, 21)
+    date_text = "FRIDAY, 20 NOVEMBER 2026"
+    dw = draw.textlength(date_text, font=date_f)
+    draw.text(((PAGE - dw) / 2, 82), date_text, font=date_f, fill=GOLD)
+    draw.rectangle([0, band_h, PAGE, band_h + 4], fill=GOLD)
+    return band_h + 4
+
+
+LEAD = {
+    "kicker": "TRILATERAL SUMMIT  ·  SHENZHEN",
+    "headline": "Trump, Xi and Putin meet in Shenzhen",
+    "deck": ("The three leaders hold their first trilateral summit, backing "
+             "efforts to stop nuclear proliferation and discussing Ukraine, "
+             "Iran, trade and energy."),
+}
+
+STORIES = [
+    {
+        "kicker": "WORLD COURT",
+        "headline": "Myanmar committed genocide against Rohingya, UN court rules",
+        "deck": ("The International Court of Justice finds Myanmar's military "
+                 "intended to destroy a substantial part of the minority."),
+    },
+    {
+        "kicker": "WASHINGTON",
+        "headline": "Trump puts Iran war decision off to 2027",
+        "deck": ("The president says there is no rush and he will 'see what "
+                 "happens' after 1 January."),
+    },
+    {
+        "kicker": "MIDDLE EAST",
+        "headline": "Houthis strike Riyadh; tanker hits mine near Hormuz",
+        "deck": ("A landmark tower is damaged in the Saudi capital and a "
+                 "tanker catches fire east of the strait."),
+    },
+    {
+        "kicker": "WEATHER",
+        "headline": "Cyclone Akvan nears India's east coast",
+        "deck": ("About 300,000 people evacuated in Odisha as the storm heads "
+                 "for landfall with 90–110 km/h winds."),
+    },
+    {
+        "kicker": "SCIENCE",
+        "headline": "Voyager 1 reaches a light-day from Earth",
+        "deck": ("NASA confirms the milestone: nearly 50 years after launch, "
+                 "the probe is a full light-day out."),
+    },
+    {
+        "kicker": "MARKETS",
+        "headline": "Anthropic IPO is the largest on record",
+        "deck": ("The AI firm raises $81.3bn at $83 a share and its stock "
+                 "begins trading on Nasdaq as ANT."),
+    },
+]
+
+ALSO_TODAY = ("ALSO TODAY:  COP31 climate talks close in Antalya  ·  Kyiv hit "
+              "by four ballistic missiles  ·  Genoa airport halts flights "
+              "after drones are seen")
+
+FOOTER = "Sources: Reuters, BBC, The Hindu, Space, Marketscreener  ·  Friday, 20 November 2026"
+
+
+def paint_lead(draw, y):
+    kicker_f = font(SANS_B, 17)
+    head_f = font(SERIF_B, 52)
+    deck_f = font(SERIF, 23)
+    draw.text((MARGIN, y), LEAD["kicker"], font=kicker_f, fill=KICKER_RED)
+    y += 30
+    y = text_block(draw, MARGIN, y,
+                   wrap(LEAD["headline"], head_f, PAGE - 2 * MARGIN),
+                   head_f, INK, 58)
+    y += 6
+    y = text_block(draw, MARGIN, y,
+                   wrap(LEAD["deck"], deck_f, PAGE - 2 * MARGIN),
+                   deck_f, DECK_GREY, 30)
+    return y + 14
+
+
+def paint_story(draw, story, x, y):
+    kicker_f = font(SANS_B, 15)
+    head_f = font(SERIF_B, 27)
+    deck_f = font(SERIF, 19)
+    draw.text((x, y), story["kicker"], font=kicker_f, fill=KICKER_RED)
+    y += 26
+    y = text_block(draw, x, y,
+                   wrap(story["headline"], head_f, COL_W),
+                   head_f, INK, 31)
+    y += 4
+    y = text_block(draw, x, y,
+                   wrap(story["deck"], deck_f, COL_W),
+                   deck_f, DECK_GREY, 24)
+    return y
+
+
+def paint_grid(draw, y):
+    row_gap = 38
+    left_x = MARGIN
+    right_x = MARGIN + COL_W + GUTTER
+    divider_x = MARGIN + COL_W + GUTTER // 2
+    top = y
+    for row in range(3):
+        left = STORIES[row * 2]
+        right = STORIES[row * 2 + 1]
+        left_bottom = paint_story(draw, left, left_x, y)
+        right_bottom = paint_story(draw, right, right_x, y)
+        y = max(left_bottom, right_bottom) + row_gap
+    draw.line([divider_x, top, divider_x, y - row_gap], fill=FAINT, width=1)
+    return y - row_gap
+
+
+def paint_strip(draw, y):
+    strip_f = font(SANS_B, 18)
+    draw.line([MARGIN, y, PAGE - MARGIN, y], fill=RULE, width=2)
+    y += 12
+    y = text_block(draw, MARGIN, y,
+                   wrap(ALSO_TODAY, strip_f, PAGE - 2 * MARGIN),
+                   strip_f, INK, 25)
+    y += 12
+    draw.line([MARGIN, y, PAGE - MARGIN, y], fill=RULE, width=2)
+    return y
+
+
+def paint_footer(draw, y):
+    foot_f = font(SANS, 16)
+    fw = draw.textlength(FOOTER, font=foot_f)
+    draw.text(((PAGE - fw) / 2, y), FOOTER, font=foot_f, fill=FAINT)
 
 
 def main():
-    img = Image.new("RGB", (W, H), PAPER)
-    d = ImageDraw.Draw(img)
-
-    # ---- Masthead -------------------------------------------------
-    d.rectangle([0, 0, W, 132], fill=NAVY)
-    draw_globe(d, 78, 66, 30, GOLD)
-    title = "ONE DAY IN THE WORLD"
-    tf = font(SERIF_B, 56)
-    d.text(((W - d.textlength(title, font=tf)) / 2, 24), title,
-           font=tf, fill=(250, 248, 242))
-    date = "FRIDAY, 20 NOVEMBER 2026"
-    df = font(SANS_B, 21)
-    d.text(((W - d.textlength(date, font=df)) / 2, 92), date,
-           font=df, fill=GOLD)
-    d.line([0, 132, W, 132], fill=GOLD, width=3)
-
-    # ---- Lead story ----------------------------------------------
-    y = 156
-    kf = font(SANS_B, 17)
-    d.text((MARGIN, y), "TRILATERAL SUMMIT  ·  SHENZHEN", font=kf, fill=RED)
-    y += 30
-    hf = font(SERIF_B, 48)
-    for line in ["Trump, Xi and Putin meet", "in Shenzhen"]:
-        d.text((MARGIN, y), line, font=hf, fill=INK)
-        y += 58
-    y += 6
-    deck = ("The three leaders hold their first trilateral summit, "
-            "backing efforts to stop nuclear proliferation and "
-            "discussing Ukraine, Iran, trade and energy.")
-    df2 = font(SANS, 21)
-    for line in wrap(d, deck, df2, W - 2 * MARGIN):
-        d.text((MARGIN, y), line, font=df2, fill=(58, 54, 48))
-        y += 28
-    y += 14
-    d.line([MARGIN, y, W - MARGIN, y], fill=INK, width=2)
+    canvas = Image.new("RGB", (PAGE, PAGE), PAPER)
+    draw = ImageDraw.Draw(canvas)
+    y = paint_masthead(draw)
     y += 22
-
-    # ---- Grid: six stories, two columns x three rows --------------
-    stories = [
-        ("WORLD COURT",
-         "Myanmar committed genocide against Rohingya, UN court rules",
-         "The International Court of Justice finds Myanmar's military "
-         "intended to destroy a substantial part of the minority."),
-        ("WASHINGTON",
-         "Trump puts Iran war decision off to 2027",
-         "The president says there is no rush and he will 'see what "
-         "happens' after 1 January."),
-        ("MIDDLE EAST",
-         "Houthis strike Riyadh; tanker hits mine near Hormuz",
-         "A landmark tower is damaged in the Saudi capital and a "
-         "tanker catches fire east of the strait."),
-        ("WEATHER",
-         "Cyclone Akvan nears India's east coast",
-         "About 300,000 people evacuated in Odisha as the storm "
-         "heads for landfall with 90\u2013110 km/h winds."),
-        ("SCIENCE",
-         "Voyager 1 reaches a light-day from Earth",
-         "NASA confirms the milestone: nearly 50 years after launch, "
-         "the probe is a full light-day out."),
-        ("MARKETS",
-         "Anthropic IPO is the largest on record",
-         "The AI firm raises $81.3bn at $83 a share and its stock "
-         "begins trading on Nasdaq as ANT."),
-    ]
-    row_h = 164
-    for i, (kicker, headline, deck) in enumerate(stories):
-        col, row = i % 2, i // 2
-        x = MARGIN + col * (COL_W + 32)
-        top = y + row * row_h
-        d.text((x, top), kicker, font=kf, fill=RED)
-        hy = top + 26
-        hf2 = font(SERIF_B, 25)
-        for line in wrap(d, headline, hf2, COL_W)[:3]:
-            d.text((x, hy), line, font=hf2, fill=INK)
-            hy += 31
-        hy += 4
-        df3 = font(SANS, 18)
-        for line in wrap(d, deck, df3, COL_W)[:3]:
-            d.text((x, hy), line, font=df3, fill=(58, 54, 48))
-            hy += 23
-        if col == 0:
-            d.line([x + COL_W + 16, top + 4, x + COL_W + 16,
-                    top + row_h - 18], fill=(200, 192, 172), width=1)
-
-    y = y + 3 * row_h + 6
-    d.line([MARGIN, y, W - MARGIN, y], fill=INK, width=2)
-    y += 12
-    also = ("ALSO TODAY: COP31 climate talks close in Antalya  \u00b7  Kyiv "
-            "hit by four ballistic missiles  \u00b7  Genoa airport halts "
-            "flights after drones are seen")
-    af = font(SANS_B, 16)
-    for line in wrap(d, also, af, W - 2 * MARGIN):
-        d.text((MARGIN, y), line, font=af, fill=(58, 54, 48))
-        y += 22
-    y += 8
-    d.line([MARGIN, y, W - MARGIN, y], fill=INK, width=2)
-    y += 12
-    foot = ("Sources: Reuters, BBC, The Hindu, Space, Marketscreener "
-            "\u00b7  Friday, 20 November 2026")
-    ff = font(SANS, 15)
-    d.text(((W - d.textlength(foot, font=ff)) / 2, y), foot,
-           font=ff, fill=GREY)
-
-    img.save(OUT, format="PNG", optimize=True)
-    print(f"Wrote {OUT} ({OUT.stat().st_size} bytes, {img.size[0]}x{img.size[1]})")
+    y = paint_lead(draw, y)
+    draw.line([MARGIN, y, PAGE - MARGIN, y], fill=RULE, width=2)
+    y += 26
+    y = paint_grid(draw, y)
+    y += 24
+    y = paint_strip(draw, y)
+    paint_footer(draw, y + 20)
+    canvas.save("entry.png", optimize=True)
 
 
 if __name__ == "__main__":
